@@ -141,6 +141,7 @@ class MainInterfaceNode(Node):
         global video_display
         global keys_down
         global keyboard_capturing
+        global qr_codes_strings
 
         # Get frames and display them
         frame_0 = self.bridge.imgmsg_to_cv2(msg_0, "bgr8")
@@ -274,6 +275,9 @@ class MainInterfaceNode(Node):
             elif "r" in keys_down:
                 video_display = "raw"
                 raise ChangeCamerasException
+
+            if "c" in keys_down:
+                qr_codes_strings = []
         
         # bms_msg -> base motion states message
         bms_msg = String()
