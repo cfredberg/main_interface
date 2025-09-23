@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import String
+from std_msgs.msg import Int8
 from sensor_msgs.msg import Image
 from message_filters import Subscriber, TimeSynchronizer
 
@@ -48,10 +49,13 @@ def key_up(key):
 
 keys_down = set()
 
+speed = 50
+
 keyboard_listener = keyboard.Listener(on_press=key_down, on_release=key_up)
 keyboard_listener.start()
 
 qr_codes_strings = []
+hazmat_strings = []
 
 class PeacefulExit(Exception):
     def __str__(self):
@@ -65,24 +69,24 @@ class MainInterfaceNode(Node):
     def __init__(self):
         super().__init__("main_interface")
         self.declare_parameter('use_webcam', False)
-        self.declare_parameter('camera_0', "")
-        self.declare_parameter('camera_1', "")
-        self.declare_parameter('camera_2', "")
-        self.declare_parameter('camera_3', "")
+        self.declare_parameter('camera_0', 0)
+        self.declare_parameter('camera_1', 1)
+        self.declare_parameter('camera_2', 2)
+        self.declare_parameter('camera_3', 3)
         
         use_webcam = self.get_parameter('use_webcam').get_parameter_value().bool_value
         if not use_webcam:
-            self.camera_0 = self.get_parameter('camera_0').get_parameter_value().string_value
-            self.camera_1 = self.get_parameter('camera_1').get_parameter_value().string_value
-            self.camera_2 = self.get_parameter('camera_2').get_parameter_value().string_value
-            self.camera_3 = self.get_parameter('camera_3').get_parameter_value().string_value
+            self.camera_0 = self.get_parameter('camera_0').get_parameter_value().integer_value
+            self.camera_1 = self.get_parameter('camera_1').get_parameter_value().integer_value
+            self.camera_2 = self.get_parameter('camera_2').get_parameter_value().integer_value
+            self.camera_3 = self.get_parameter('camera_3').get_parameter_value().integer_value
         else:
             self.camera_0 = self.camera_1 = self.camera_2 = self.camera_3 = 0
 
         self.bridge = CvBridge()
 
         # bms_publisher -> base motion states publisher
-        self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 10)
+        self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
 
         self.camera_view = -1
 
@@ -136,18 +140,49 @@ class MainInterfaceNode(Node):
             self.get_qr_strings,
             1)
 
+        self.hazmat_camera_0_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_{self.camera_0}',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_1_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_{self.camera_1}',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_2_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_{self.camera_2}',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_3_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_{self.camera_3}',
+            self.get_hazmat_strings,
+            1)
+
+        self.speed_subscription = self.create_subscription(
+            Int8,
+            f'/speed',
+            self.get_speed,
+            1)
+
 
     def listener_callback(self, msg_0, msg_1, msg_2, msg_3):
+        print("spinning")
         global video_display
         global keys_down
         global keyboard_capturing
         global qr_codes_strings
+        global hazmat_strings
+        global speed
 
         # Get frames and display them
         frame_0 = self.bridge.imgmsg_to_cv2(msg_0, "bgr8")
         frame_1 = self.bridge.imgmsg_to_cv2(msg_1, "bgr8")
         frame_2 = self.bridge.imgmsg_to_cv2(msg_2, "bgr8")
         frame_3 = self.bridge.imgmsg_to_cv2(msg_3, "bgr8")
+        print("got frames")
 
         window_height = 1000
 
@@ -201,7 +236,8 @@ class MainInterfaceNode(Node):
         all_frames = cv2.hconcat([all_frames, black_background])
 
         # cv2.putText(frame, text, position, font, scale, color, thickness)
-        cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]*100}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        # cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]*100}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Motor Speed: {speed}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'Base Motion: {base_motion_states["base_motion"]}', (1350, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'Video Display: {video_display}', (1350, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'QR Labels:', (1350, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
@@ -210,11 +246,23 @@ class MainInterfaceNode(Node):
         for string in qr_codes_strings:
             qr_codes_string += string + "\n"
         
+        hazmat_string = ""
+        for string in hazmat_strings:
+            hazmat_string += string + "\n"
+        
         print(f"QR Codes String: {qr_codes_string}")
+        print(f"Hazmat String: {hazmat_string}")
 
         start_y = 250
         y_inc = 50
         for i, data in enumerate(qr_codes_string.split("\n")):
+            cv2.putText(all_frames, data, (1350, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        
+        cv2.putText(all_frames, f'Hazmat Labels:', (1350, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
+        start_y = 600
+        y_inc = 50
+        for i, data in enumerate(hazmat_string.split("\n")):
             cv2.putText(all_frames, data, (1350, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
         cv2.imshow("Camera Output", all_frames)
@@ -278,6 +326,7 @@ class MainInterfaceNode(Node):
 
             if "c" in keys_down:
                 qr_codes_strings = []
+                hazmat_strings = []
         
         # bms_msg -> base motion states message
         bms_msg = String()
@@ -292,6 +341,17 @@ class MainInterfaceNode(Node):
         for string in qr_strings:
             if string not in qr_codes_strings:
                 qr_codes_strings.append(string)
+
+    def get_hazmat_strings(self, h_strings):
+        global hazmat_strings
+        h_strings = eval(h_strings.data)
+        for string in h_strings:
+            if string not in hazmat_strings:
+                hazmat_strings.append(string)
+
+    def get_speed(self, speed_msg):
+        global speed
+        speed = speed_msg.data
 
 def main(args=None):
     global video_display

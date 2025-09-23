@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        	'main_node = main_interface.main:main'
+        	'main_node = main_interface.main:main',
+            'read_speed = main_interface.read_speed:main'
         ],
     },
 )
