@@ -31,31 +31,12 @@ base_motion states:
 speed is a multiplier (just a percentage)
 '''
 
-video_display = "raw"
-
-keyboard_capturing = True
-
-def key_down(key):
-    try:
-        keys_down.add(key.char)
-    except AttributeError:
-        keys_down.add(key)
-
-def key_up(key):
-    try:
-        keys_down.remove(key.char)
-    except AttributeError:
-        keys_down.remove(key)
-
-keys_down = set()
-
-speed = 50
-
-keyboard_listener = keyboard.Listener(on_press=key_down, on_release=key_up)
-keyboard_listener.start()
-
 qr_codes_strings = []
 hazmat_strings = []
+
+keys_down = []
+video_display = "raw"
+keyboard_capturing = True
 
 class PeacefulExit(Exception):
     def __str__(self):
@@ -86,7 +67,7 @@ class MainInterfaceNode(Node):
         self.bridge = CvBridge()
 
         # bms_publisher -> base motion states publisher
-        self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
+        # self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
 
         self.camera_view = -1
 
@@ -160,11 +141,17 @@ class MainInterfaceNode(Node):
             f'/hazmat/string/camera_{self.camera_3}',
             self.get_hazmat_strings,
             1)
-
-        self.speed_subscription = self.create_subscription(
-            Int8,
-            f'/speed',
-            self.get_speed,
+        
+        self.keyboard_subscription = self.create_subscription(
+            String,
+            f'/keyboard',
+            self.get_keyboard,
+            1)
+        
+        self.base_motion_subscription = self.create_subscription(
+            String,
+            f'/motor_states/drive',
+            self.get_bms,
             1)
 
 
@@ -175,7 +162,6 @@ class MainInterfaceNode(Node):
         global keyboard_capturing
         global qr_codes_strings
         global hazmat_strings
-        global speed
 
         # Get frames and display them
         frame_0 = self.bridge.imgmsg_to_cv2(msg_0, "bgr8")
@@ -237,7 +223,8 @@ class MainInterfaceNode(Node):
 
         # cv2.putText(frame, text, position, font, scale, color, thickness)
         # cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]*100}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        cv2.putText(all_frames, f'Motor Speed: {speed}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        # -------------------------
+        cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'Base Motion: {base_motion_states["base_motion"]}', (1350, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'Video Display: {video_display}', (1350, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'QR Labels:', (1350, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
@@ -271,67 +258,67 @@ class MainInterfaceNode(Node):
 
         cv2.waitKey(1)
 
-        if keyboard.Key.f11 in keys_down:
-            keyboard_capturing = False
-        elif keyboard.Key.f12 in keys_down:
-            keyboard_capturing = True
+        # if keyboard.Key.f11 in keys_down:
+        #     keyboard_capturing = False
+        # elif keyboard.Key.f12 in keys_down:
+        #     keyboard_capturing = True
 
-        if keyboard_capturing:
-            if keyboard.Key.esc in keys_down:
-                # quit
-                raise PeacefulExit()
+        # if keyboard_capturing:
+        #     if keyboard.Key.esc in keys_down:
+        #         # quit
+        #         raise PeacefulExit()
             
-            if "w" in keys_down and "a" in keys_down:
-                base_motion_states["base_motion"] = "forward_left"
-            elif "w" in keys_down and "d" in keys_down:
-                base_motion_states["base_motion"] = "forward_right"
-            elif "s" in keys_down and "a" in keys_down:
-                base_motion_states["base_motion"] = "reverse_left"
-            elif "s" in keys_down and "d" in keys_down:
-                base_motion_states["base_motion"] = "reverse_right"
-            elif "w" in keys_down:
-                base_motion_states["base_motion"] = "forward"
-            elif "s" in keys_down:
-                base_motion_states["base_motion"] = "reverse"
-            elif "a" in keys_down:
-                base_motion_states["base_motion"] = "left"
-            elif "d" in keys_down:
-                base_motion_states["base_motion"] = "right"
-            else:
-                base_motion_states["base_motion"] = "still"
+        #     if "w" in keys_down and "a" in keys_down:
+        #         base_motion_states["base_motion"] = "forward_left"
+        #     elif "w" in keys_down and "d" in keys_down:
+        #         base_motion_states["base_motion"] = "forward_right"
+        #     elif "s" in keys_down and "a" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse_left"
+        #     elif "s" in keys_down and "d" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse_right"
+        #     elif "w" in keys_down:
+        #         base_motion_states["base_motion"] = "forward"
+        #     elif "s" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse"
+        #     elif "a" in keys_down:
+        #         base_motion_states["base_motion"] = "left"
+        #     elif "d" in keys_down:
+        #         base_motion_states["base_motion"] = "right"
+        #     else:
+        #         base_motion_states["base_motion"] = "still"
 
-            if "1" in keys_down:
-                self.camera_view = 0
-            elif "2" in keys_down:
-                self.camera_view = 1
-            elif "3" in keys_down:
-                self.camera_view = 2
-            elif "4" in keys_down:
-                self.camera_view = 3
-            elif "5" in keys_down:
-                self.camera_view = -1
+        #     if "1" in keys_down:
+        #         self.camera_view = 0
+        #     elif "2" in keys_down:
+        #         self.camera_view = 1
+        #     elif "3" in keys_down:
+        #         self.camera_view = 2
+        #     elif "4" in keys_down:
+        #         self.camera_view = 3
+        #     elif "5" in keys_down:
+        #         self.camera_view = -1
             
-            if "h" in keys_down:
-                video_display = "hazmat"
-                raise ChangeCamerasException
-            elif "m" in keys_down:
-                video_display = "motion"
-                raise ChangeCamerasException
-            elif "q" in keys_down:
-                video_display = "qr"
-                raise ChangeCamerasException
-            elif "r" in keys_down:
-                video_display = "raw"
-                raise ChangeCamerasException
+        #     if "h" in keys_down:
+        #         video_display = "hazmat"
+        #         raise ChangeCamerasException
+        #     elif "m" in keys_down:
+        #         video_display = "motion"
+        #         raise ChangeCamerasException
+        #     elif "q" in keys_down:
+        #         video_display = "qr"
+        #         raise ChangeCamerasException
+        #     elif "r" in keys_down:
+        #         video_display = "raw"
+        #         raise ChangeCamerasException
 
-            if "c" in keys_down:
-                qr_codes_strings = []
-                hazmat_strings = []
+        #     if "c" in keys_down:
+        #         qr_codes_strings = []
+        #         hazmat_strings = []
         
         # bms_msg -> base motion states message
-        bms_msg = String()
-        bms_msg.data = json.dumps(base_motion_states)
-        self.bms_publisher.publish(bms_msg)
+        # bms_msg = String()
+        # bms_msg.data = json.dumps(base_motion_states)
+        # self.bms_publisher.publish(bms_msg)
         
         # self.get_logger().info(f'I heard: {four_frames.dtype}\n\n\n\n\n')
 
@@ -349,10 +336,50 @@ class MainInterfaceNode(Node):
             if string not in hazmat_strings:
                 hazmat_strings.append(string)
 
-    def get_speed(self, speed_msg):
-        global speed
-        speed = speed_msg.data
+    
+    def get_keyboard(self, keyboard_msg):
+        global keys_down
+        global qr_codes_strings
+        global hazmat_strings
+        global video_display
+        keys_down = eval(keyboard_msg.data)
+        print(f"Keys Down: {keys_down}")
+        if keyboard.Key.esc in keys_down:
+                # quit
+                raise PeacefulExit()
+        if "1" in keys_down:
+                self.camera_view = 0
+        elif "2" in keys_down:
+            self.camera_view = 1
+        elif "3" in keys_down:
+            self.camera_view = 2
+        elif "4" in keys_down:
+            self.camera_view = 3
+        elif "5" in keys_down:
+            self.camera_view = -1
+        
+        if "h" in keys_down:
+            video_display = "hazmat"
+            raise ChangeCamerasException
+        elif "m" in keys_down:
+            video_display = "motion"
+            raise ChangeCamerasException
+        elif "q" in keys_down:
+            video_display = "qr"
+            raise ChangeCamerasException
+        elif "r" in keys_down:
+            video_display = "raw"
+            raise ChangeCamerasException
 
+        if "c" in keys_down:
+            qr_codes_strings = []
+            hazmat_strings = []
+
+    def get_bms(self, bms_msg):
+        global base_motion_states
+        base_motion_states = json.loads(bms_msg.data)
+
+        
 def main(args=None):
     global video_display
     rclpy.init(args=args)
