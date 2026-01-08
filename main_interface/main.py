@@ -73,6 +73,8 @@ class MainInterfaceNode(Node):
 
         global video_display
 
+        self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', 1)
+
         self.camera_0_subscriber = Subscriber(
             self,
             Image,
@@ -153,6 +155,8 @@ class MainInterfaceNode(Node):
             f'/motor_states/drive',
             self.get_bms,
             1)
+        
+        self.bridge = CvBridge()
 
 
     def listener_callback(self, msg_0, msg_1, msg_2, msg_3):
@@ -252,11 +256,15 @@ class MainInterfaceNode(Node):
         for i, data in enumerate(hazmat_string.split("\n")):
             cv2.putText(all_frames, data, (1350, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
-        cv2.imshow("Camera Output", all_frames)
+        msg = self.bridge.cv2_to_imgmsg(all_frames, "bgr8")
+
+        self.main_interface_frame.publish(msg)
+
+        # cv2.imshow("Camera Output", all_frames)
 
         # Handle keyboard input
 
-        cv2.waitKey(1)
+        # cv2.waitKey(1)
 
         # if keyboard.Key.f11 in keys_down:
         #     keyboard_capturing = False
