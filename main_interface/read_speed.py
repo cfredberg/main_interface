@@ -5,12 +5,14 @@ import time
 import serial
 
 from std_msgs.msg import Int8
+from std_msgs.msg import Bool
 
 class ReadSpeedNode(Node):
     def __init__(self):
         super().__init__("main_interface")
         
-        self.publisher = self.create_publisher(Int8, f'/speed', 1)
+        self.speed_pub = self.create_publisher(Int8, '/speed', 1)
+        self.rev_pub = self.create_publisher(Bool, '/reverse', 1)
 
         self.arduino = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)
         self.arduino.flushInput()
@@ -32,6 +34,14 @@ class ReadSpeedNode(Node):
                     reverse = bool(int(data_string[1]))
 
                     self.arduino.flushInput()
+
+                    speed_msg = Int8()
+                    speed_msg.data = speed_percent
+                    self.speed_pub.publish(speed_msg)
+
+                    rev_msg = Bool()
+                    rev_msg.data = reverse
+                    self.rev_pub.publish(rev_msg)
 
         except UnicodeDecodeError as e:
             print(e)
