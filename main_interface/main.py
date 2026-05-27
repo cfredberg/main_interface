@@ -228,10 +228,13 @@ class MainInterfaceNode(Node):
         # cv2.putText(frame, text, position, font, scale, color, thickness)
         # cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]*100}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         # -------------------------
-        cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        cv2.putText(all_frames, f'Base Motion: {base_motion_states["base_motion"]}', (1350, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        cv2.putText(all_frames, f'Video Display: {video_display}', (1350, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        cv2.putText(all_frames, f'QR Labels:', (1350, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
+        left_x = 1350
+
+        cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]}%', (left_x, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Base Motion: {base_motion_states["base_motion"]}', (left_x, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Video Display: {video_display}', (left_x, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'QR Labels:', (left_x, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
         qr_codes_string = ""
         for string in qr_codes_strings:
@@ -247,14 +250,14 @@ class MainInterfaceNode(Node):
         start_y = 250
         y_inc = 50
         for i, data in enumerate(qr_codes_string.split("\n")):
-            cv2.putText(all_frames, data, (1350, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.putText(all_frames, data, (left_x, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         
-        cv2.putText(all_frames, f'Hazmat Labels:', (1350, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Hazmat Labels:', (left_x, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
         start_y = 600
         y_inc = 50
         for i, data in enumerate(hazmat_string.split("\n")):
-            cv2.putText(all_frames, data, (1350, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+            cv2.putText(all_frames, data, (left_x, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
         msg = self.bridge.cv2_to_imgmsg(all_frames, "bgr8")
 
