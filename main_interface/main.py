@@ -16,7 +16,8 @@ import json
 
 from cv_bridge import CvBridge
 
-base_motion_states = {"base_motion":"still", "speed":0.5}
+base_motion = "still"
+speed = 50
 '''
 base_motion states:
     still
@@ -153,7 +154,13 @@ class MainInterfaceNode(Node):
         self.base_motion_subscription = self.create_subscription(
             String,
             f'/motor_states/drive',
-            self.get_bms,
+            self.get_ms,
+            1)
+        
+        self.speed_subscription = self.create_subscription(
+            Int8,
+            f'/speed',
+            self.get_speed,
             1)
         
         self.bridge = CvBridge()
@@ -231,8 +238,8 @@ class MainInterfaceNode(Node):
 
         left_x = 1350
 
-        cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]}%', (left_x, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-        cv2.putText(all_frames, f'Base Motion: {base_motion_states["base_motion"]}', (left_x, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Motor Speed: {speed}%', (left_x, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Base Motion: {base_motion}', (left_x, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'Video Display: {video_display}', (left_x, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
         cv2.putText(all_frames, f'QR Labels:', (left_x, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
@@ -386,9 +393,13 @@ class MainInterfaceNode(Node):
             qr_codes_strings = []
             hazmat_strings = []
 
-    def get_bms(self, bms_msg):
-        global base_motion_states
-        base_motion_states = json.loads(bms_msg.data)
+    def get_ms(self, ms_msg):
+        global base_motion
+        base_motion = ms_msg.data
+
+    def get_speed(self, speed_msg):
+        global speed
+        speed = speed_msg.data
 
         
 def main(args=None):

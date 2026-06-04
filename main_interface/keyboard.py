@@ -16,7 +16,7 @@ import json
 
 from cv_bridge import CvBridge
 
-base_motion_states = {"base_motion":"still", "speed":0.5}
+base_motion = "still"
 
 video_display = "raw"
 
@@ -44,7 +44,7 @@ class KeyboardInputNode(Node):
         super().__init__("keyboard_input")
         
         self.keyboard_input_publisher = self.create_publisher(String, '/keyboard', 1)
-        self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
+        self.ms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
         
         timer_period = 1/60  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -64,60 +64,32 @@ class KeyboardInputNode(Node):
             #     raise PeacefulExit()
             
             if "w" in keys_down and "a" in keys_down:
-                base_motion_states["base_motion"] = "forward_left"
+                base_motion = "forward_left"
             elif "w" in keys_down and "d" in keys_down:
-                base_motion_states["base_motion"] = "forward_right"
+                base_motion = "forward_right"
             elif "s" in keys_down and "a" in keys_down:
-                base_motion_states["base_motion"] = "reverse_left"
+                base_motion = "reverse_left"
             elif "s" in keys_down and "d" in keys_down:
-                base_motion_states["base_motion"] = "reverse_right"
+                base_motion = "reverse_right"
             elif "w" in keys_down:
-                base_motion_states["base_motion"] = "forward"
+                base_motion = "forward"
             elif "s" in keys_down:
-                base_motion_states["base_motion"] = "reverse"
+                base_motion = "reverse"
             elif "a" in keys_down:
-                base_motion_states["base_motion"] = "left"
+                base_motion = "left"
             elif "d" in keys_down:
-                base_motion_states["base_motion"] = "right"
+                base_motion = "right"
             else:
-                base_motion_states["base_motion"] = "still"
-
-            # if "1" in keys_down:
-            #     self.camera_view = 0
-            # elif "2" in keys_down:
-            #     self.camera_view = 1
-            # elif "3" in keys_down:
-            #     self.camera_view = 2
-            # elif "4" in keys_down:
-            #     self.camera_view = 3
-            # elif "5" in keys_down:
-            #     self.camera_view = -1
-            
-            # if "h" in keys_down:
-            #     video_display = "hazmat"
-            #     raise ChangeCamerasException
-            # elif "m" in keys_down:
-            #     video_display = "motion"
-            #     raise ChangeCamerasException
-            # elif "q" in keys_down:
-            #     video_display = "qr"
-            #     raise ChangeCamerasException
-            # elif "r" in keys_down:
-            #     video_display = "raw"
-            #     raise ChangeCamerasException
-
-            # if "c" in keys_down:
-            #     qr_codes_strings = []
-            #     hazmat_strings = []
+                base_motion = "still"
 
             current_keys = String()
             current_keys.data = str(keys_down)
 
             self.keyboard_input_publisher.publish(current_keys)
 
-        bms_msg = String()
-        bms_msg.data = json.dumps(base_motion_states)
-        self.bms_publisher.publish(bms_msg)
+        ms_msg = String()
+        ms_msg.data = base_motion
+        self.ms_publisher.publish(ms_msg)
 
 
 def main(args=None):
