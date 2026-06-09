@@ -8,7 +8,8 @@ from message_filters import Subscriber, TimeSynchronizer
 
 import numpy as np
 
-from pynput import keyboard
+import evdev
+from evdev import ecodes
 
 import cv2
 
@@ -20,64 +21,54 @@ base_motion = "still"
 
 video_display = "raw"
 
-keyboard_capturing = True
-
-def key_down(key):
-    try:
-        keys_down.add(key.char)
-    except AttributeError:
-        keys_down.add(key)
-
-def key_up(key):
-    try:
-        keys_down.remove(key.char)
-    except AttributeError:
-        keys_down.remove(key)
-
-keys_down = set()
-
-keyboard_listener = keyboard.Listener(on_press=key_down, on_release=key_up)
-keyboard_listener.start()
-
 class KeyboardInputNode(Node):
     def __init__(self):
         super().__init__("keyboard_input")
+
+        self.declare_parameter("keyboard_name", "usb-ITE_Tech._Inc._ITE_Device_8258_-event-kbd")
+
+        kbd_name = self.get_parameter("keyboard_name").get_parameter_value().string_value
         
         self.keyboard_input_publisher = self.create_publisher(String, '/keyboard', 1)
         self.ms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
+
+        self.kbd = evdev.InputDevice(f"/dev/input/by-id/{kbd_name}")
+
+        self.keyboard_capturing = True
         
         timer_period = 1/60  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
     def timer_callback(self):
-        global keyboard_capturing
+        raw_keys = self.kbd.active_keys()
+        keys_down = [ecodes.KEY[k] for k in raw_keys]
 
-        if keyboard.Key.f11 in keys_down:
-            keyboard_capturing = False
-        elif keyboard.Key.f12 in keys_down:
-            keyboard_capturing = True
+        if "KEY_F11" in keys_down:
+            self.keyboard_capturing = False
+        elif "KEY_F12" in keys_down:
+            self.keyboard_capturing = True
 
-        if keyboard_capturing:
+        if self.keyboard_capturing:
             # if keyboard.Key.esc in keys_down:
             #     # quit
             #     raise PeacefulExit()
             
-            if "w" in keys_down and "a" in keys_down:
+            if "KEY_W" in keys_down and "KEY_A" in keys_down:
                 base_motion = "forward_left"
-            elif "w" in keys_down and "d" in keys_down:
+            elif "KEY_W" in keys_down and "KEY_D" in keys_down:
                 base_motion = "forward_right"
-            elif "s" in keys_down and "a" in keys_down:
+            elif "KEY_S" in keys_down and "KEY_A" in keys_down:
                 base_motion = "reverse_left"
-            elif "s" in keys_down and "d" in keys_down:
+            elif "KEY_S" in keys_down and "KEY_D" in keys_down:
                 base_motion = "reverse_right"
-            elif "w" in keys_down:
+            elif "KEY_W" in keys_down:
                 base_motion = "forward"
-            elif "s" in keys_down:
+            elif "KEY_S" in keys_down:
                 base_motion = "reverse"
-            elif "a" in keys_down:
+            elif "KEY_A" in keys_down:
                 base_motion = "left"
-            elif "d" in keys_down:
+            elif "KEY_D" in keys_down:
                 base_motion = "right"
             else:
                 base_motion = "still"

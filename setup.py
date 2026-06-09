@@ -22,7 +22,8 @@ setup(
         'console_scripts': [
         	'main_node = main_interface.main:main',
             'read_speed = main_interface.read_speed:main',
-            'keyboard = main_interface.keyboard:main'
+            'keyboard = main_interface.keyboard:main',
+            'wayland_keyboard = main_interface.wayland_keyboard:main'
         ],
     },
 )
