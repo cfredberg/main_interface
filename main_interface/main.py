@@ -76,25 +76,38 @@ class MainInterfaceNode(Node):
 
         self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', 1)
 
-        self.camera_0_subscriber = Subscriber(
-            self,
+        self.camera_0_subscription = self.create_subscription(
             Image,
-            f'/cameras/{video_display}/camera_{self.camera_0}')
-        self.camera_1_subscriber = Subscriber(
-            self,
+            f'/cameras/{video_display}/camera_{self.camera_0}',
+            self.camera_0_callback,
+            1)
+        self.camera_1_subscription = self.create_subscription(
             Image,
-            f'/cameras/{video_display}/camera_{self.camera_1}')
-        self.camera_2_subscriber = Subscriber(
-            self,
+            f'/cameras/{video_display}/camera_{self.camera_1}',
+            self.camera_1_callback,
+            1)
+        self.camera_2_subscription = self.create_subscription(
             Image,
-            f'/cameras/{video_display}/camera_{self.camera_2}')
-        self.camera_3_subscriber = Subscriber(
-            self,
+            f'/cameras/{video_display}/camera_{self.camera_2}',
+            self.camera_2_callback,
+            1)
+        self.camera_3_subscription = self.create_subscription(
             Image,
-            f'/cameras/{video_display}/camera_{self.camera_3}')
+            f'/cameras/{video_display}/camera_{self.camera_3}',
+            self.camera_3_callback,
+            1)
 
-        self.ts = TimeSynchronizer([self.camera_0_subscriber, self.camera_1_subscriber, self.camera_2_subscriber, self.camera_3_subscriber], 1)
-        self.ts.registerCallback(self.listener_callback)
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame = cv2.putText(frame, 'No Signal', (0,480), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
+
+        self.camera_0_frame = frame
+        self.camera_1_frame = frame
+        self.camera_2_frame = frame
+        self.camera_3_frame = frame
+
+        timer_period = 1/60
+        self.timer = self.create_timer(timer_period, self.timer_callback)
+
         '''
         tells which video frames to display.  can be:
             raw
@@ -165,8 +178,19 @@ class MainInterfaceNode(Node):
         
         self.bridge = CvBridge()
 
+    def camera_0_callback(self, frame_msg):
+        self.camera_0_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+    
+    def camera_1_callback(self, frame_msg):
+        self.camera_1_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
 
-    def listener_callback(self, msg_0, msg_1, msg_2, msg_3):
+    def camera_2_callback(self, frame_msg):
+        self.camera_2_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+    
+    def camera_3_callback(self, frame_msg):
+        self.camera_3_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+
+    def timer_callback(self):
         print("spinning")
         global video_display
         global keys_down
@@ -175,10 +199,10 @@ class MainInterfaceNode(Node):
         global hazmat_strings
 
         # Get frames and display them
-        frame_0 = self.bridge.imgmsg_to_cv2(msg_0, "bgr8")
-        frame_1 = self.bridge.imgmsg_to_cv2(msg_1, "bgr8")
-        frame_2 = self.bridge.imgmsg_to_cv2(msg_2, "bgr8")
-        frame_3 = self.bridge.imgmsg_to_cv2(msg_3, "bgr8")
+        frame_0 = self.camera_0_frame
+        frame_1 = self.camera_1_frame
+        frame_2 = self.camera_2_frame
+        frame_3 = self.camera_3_frame
         print("got frames")
 
         window_height = 1000
