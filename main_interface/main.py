@@ -187,16 +187,16 @@ class MainInterfaceNode(Node):
         self.bridge = CvBridge()
 
     def camera_0_callback(self, frame_msg):
-        self.camera_0_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.camera_0_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
     
     def camera_1_callback(self, frame_msg):
-        self.camera_1_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.camera_1_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
 
     def camera_2_callback(self, frame_msg):
-        self.camera_2_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.camera_2_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
     
     def camera_3_callback(self, frame_msg):
-        self.camera_3_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        self.camera_3_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
 
     def timer_callback(self):
         print("spinning")
