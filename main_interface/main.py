@@ -8,8 +8,6 @@ from message_filters import Subscriber, TimeSynchronizer
 
 import numpy as np
 
-from pynput import keyboard
-
 import cv2
 
 import json
