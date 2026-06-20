@@ -6,6 +6,8 @@ from std_msgs.msg import Int8
 from sensor_msgs.msg import Image
 from message_filters import Subscriber, TimeSynchronizer
 
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
+
 import numpy as np
 
 import cv2
@@ -72,28 +74,34 @@ class MainInterfaceNode(Node):
 
         global video_display
 
-        self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', 1)
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+
+        self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', qos)
 
         self.camera_0_subscription = self.create_subscription(
             Image,
             f'/cameras/{video_display}/camera_{self.camera_0}',
             self.camera_0_callback,
-            1)
+            qos)
         self.camera_1_subscription = self.create_subscription(
             Image,
             f'/cameras/{video_display}/camera_{self.camera_1}',
             self.camera_1_callback,
-            1)
+            qos)
         self.camera_2_subscription = self.create_subscription(
             Image,
             f'/cameras/{video_display}/camera_{self.camera_2}',
             self.camera_2_callback,
-            1)
+            qos)
         self.camera_3_subscription = self.create_subscription(
             Image,
             f'/cameras/{video_display}/camera_{self.camera_3}',
             self.camera_3_callback,
-            1)
+            qos)
 
         frame = np.zeros((480, 640, 3), dtype=np.uint8)
         frame = cv2.putText(frame, 'No Signal', (0,480), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
