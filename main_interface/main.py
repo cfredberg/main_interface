@@ -80,25 +80,25 @@ class MainInterfaceNode(Node):
             depth=1
         )
 
-        self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', qos)
+        self.main_interface_frame = self.create_publisher(CompressedImage, '/main_interface/driver_frame', qos)
 
         self.camera_0_subscription = self.create_subscription(
-            Image,
+            CompressedImage,
             f'/cameras/{video_display}/camera_{self.camera_0}',
             self.camera_0_callback,
             qos)
         self.camera_1_subscription = self.create_subscription(
-            Image,
+            CompressedImage,
             f'/cameras/{video_display}/camera_{self.camera_1}',
             self.camera_1_callback,
             qos)
         self.camera_2_subscription = self.create_subscription(
-            Image,
+            CompressedImage,
             f'/cameras/{video_display}/camera_{self.camera_2}',
             self.camera_2_callback,
             qos)
         self.camera_3_subscription = self.create_subscription(
-            Image,
+            CompressedImage,
             f'/cameras/{video_display}/camera_{self.camera_3}',
             self.camera_3_callback,
             qos)
@@ -185,16 +185,16 @@ class MainInterfaceNode(Node):
         self.bridge = CvBridge()
 
     def camera_0_callback(self, frame_msg):
-        self.camera_0_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+        self.camera_0_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
     
     def camera_1_callback(self, frame_msg):
-        self.camera_1_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+        self.camera_1_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
     def camera_2_callback(self, frame_msg):
-        self.camera_2_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+        self.camera_2_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
     
     def camera_3_callback(self, frame_msg):
-        self.camera_3_frame = self.bridge.imgmsg_to_cv2(frame_msg, "bgr8")
+        self.camera_3_frame = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
     def timer_callback(self):
         print("spinning")
