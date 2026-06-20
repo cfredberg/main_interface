@@ -8,6 +8,8 @@ from message_filters import Subscriber, TimeSynchronizer
 
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
+from sensor_msgs.msg import CompressedImage
+
 import numpy as np
 
 import cv2
