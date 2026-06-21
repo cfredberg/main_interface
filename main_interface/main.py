@@ -82,7 +82,7 @@ class MainInterfaceNode(Node):
             depth=1
         )
 
-        self.main_interface_frame = self.create_publisher(CompressedImage, '/main_interface/driver_frame', qos)
+        self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', qos)
 
         self.camera_0_subscription = self.create_subscription(
             CompressedImage,
@@ -394,34 +394,31 @@ class MainInterfaceNode(Node):
         global video_display
         keys_down = eval(keyboard_msg.data)
         print(f"Keys Down: {keys_down}")
-        if keyboard.Key.esc in keys_down:
+        if "KEY_ESC" in keys_down:
                 # quit
                 raise PeacefulExit()
-        if "1" in keys_down:
+        if "KEY_1" in keys_down:
                 self.camera_view = 0
-        elif "2" in keys_down:
+        elif "KEY_2" in keys_down:
             self.camera_view = 1
-        elif "3" in keys_down:
+        elif "KEY_3" in keys_down:
             self.camera_view = 2
-        elif "4" in keys_down:
+        elif "KEY_4" in keys_down:
             self.camera_view = 3
-        elif "5" in keys_down:
+        elif "KEY_5" in keys_down:
             self.camera_view = -1
         
-        if "h" in keys_down:
+        if "KEY_H" in keys_down:
             video_display = "hazmat"
             raise ChangeCamerasException
-        elif "m" in keys_down:
-            video_display = "motion"
-            raise ChangeCamerasException
-        elif "q" in keys_down:
+        elif "KEY_Q" in keys_down:
             video_display = "qr"
             raise ChangeCamerasException
-        elif "r" in keys_down:
+        elif "KEY_R" in keys_down:
             video_display = "raw"
             raise ChangeCamerasException
 
-        if "c" in keys_down:
+        if "KEY_C" in keys_down:
             qr_codes_strings = []
             hazmat_strings = []
 
