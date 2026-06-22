@@ -1,55 +1,81 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.executors import MultiThreadedExecutor
 
-from std_msgs.msg import String, Int8
-from sensor_msgs.msg import Image, CompressedImage
+from std_msgs.msg import String
+from std_msgs.msg import Int8
+from sensor_msgs.msg import Image
+from message_filters import Subscriber, TimeSynchronizer
+
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
+from sensor_msgs.msg import CompressedImage
+
 import numpy as np
+
 import cv2
+
 import json
+
 from cv_bridge import CvBridge
 
-# ---------------- GLOBALS ----------------
 base_motion = "still"
 speed = 50
+'''
+base_motion states:
+    still
+    forward
+    reverse
+    turn_left
+    turn_right
+    forward_left
+    forward_right
+    reverse_left
+    reverse_right
+speed is a multiplier (just a percentage)
+'''
+
 qr_codes_strings = []
 hazmat_strings = []
+
 keys_down = []
 video_display = "raw"
-
-# -----------------------------------------
+keyboard_capturing = True
+show_ir = False
 
 class PeacefulExit(Exception):
-    pass
+    def __str__(self):
+        return "Closed node successfully"
 
 class ChangeCamerasException(Exception):
-    pass
-
+    def __str__(self):
+        return "Changing the camera subscription now"
 
 class MainInterfaceNode(Node):
     def __init__(self):
         super().__init__("main_interface")
-
-        # Parameters
         self.declare_parameter('use_webcam', False)
         self.declare_parameter('camera_0', 0)
         self.declare_parameter('camera_1', 1)
         self.declare_parameter('camera_2', 2)
         self.declare_parameter('camera_3', 3)
-
-        use_webcam = self.get_parameter('use_webcam').value
+        
+        use_webcam = self.get_parameter('use_webcam').get_parameter_value().bool_value
         if not use_webcam:
-            self.camera_0 = self.get_parameter('camera_0').value
-            self.camera_1 = self.get_parameter('camera_1').value
-            self.camera_2 = self.get_parameter('camera_2').value
-            self.camera_3 = self.get_parameter('camera_3').value
+            self.camera_0 = self.get_parameter('camera_0').get_parameter_value().integer_value
+            self.camera_1 = self.get_parameter('camera_1').get_parameter_value().integer_value
+            self.camera_2 = self.get_parameter('camera_2').get_parameter_value().integer_value
+            self.camera_3 = self.get_parameter('camera_3').get_parameter_value().integer_value
         else:
             self.camera_0 = self.camera_1 = self.camera_2 = self.camera_3 = 0
 
         self.bridge = CvBridge()
+
+        # bms_publisher -> base motion states publisher
+        # self.bms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
+
         self.camera_view = -1
+
+        global video_display
 
         qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
@@ -57,188 +83,395 @@ class MainInterfaceNode(Node):
             depth=1
         )
 
-        # Publisher
         self.main_interface_frame = self.create_publisher(Image, '/main_interface/driver_frame', qos)
 
-        # Subscriptions
-        self.create_subscription(CompressedImage, f'/cameras/{video_display}/camera_{self.camera_0}', self.camera_0_callback, qos)
-        self.create_subscription(CompressedImage, f'/cameras/{video_display}/camera_{self.camera_1}', self.camera_1_callback, qos)
-        self.create_subscription(CompressedImage, f'/cameras/{video_display}/camera_{self.camera_2}', self.camera_2_callback, qos)
-        self.create_subscription(CompressedImage, f'/cameras/{video_display}/camera_{self.camera_3}', self.camera_3_callback, qos)
+        self.camera_0_subscription = self.create_subscription(
+            CompressedImage,
+            f'/cameras/{video_display}/camera_{self.camera_0}',
+            self.camera_0_callback,
+            qos)
+        self.camera_1_subscription = self.create_subscription(
+            CompressedImage,
+            f'/cameras/{video_display}/camera_{self.camera_1}',
+            self.camera_1_callback,
+            qos)
+        self.camera_2_subscription = self.create_subscription(
+            CompressedImage,
+            f'/cameras/{video_display}/camera_{self.camera_2}',
+            self.camera_2_callback,
+            qos)
+        if show_ir:
+            self.camera_3_subscription = self.create_subscription(
+                CompressedImage,
+                f'/cameras/raw/camera_4',
+                self.camera_3_callback,
+                qos)
+        else:
+            self.camera_3_subscription = self.create_subscription(
+                CompressedImage,
+                f'/cameras/{video_display}/camera_{self.camera_3}',
+                self.camera_3_callback,
+                qos)
 
-        # Default frames
-        blank = np.zeros((480, 640, 3), dtype=np.uint8)
-        blank = cv2.putText(blank, 'No Signal', (0,480), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
-        self.camera_0_frame = blank
-        self.camera_1_frame = blank
-        self.camera_2_frame = blank
-        self.camera_3_frame = blank
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame = cv2.putText(frame, 'No Signal', (0,480), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
 
-        # Timer (keep your 60 Hz request)
-        self.timer = self.create_timer(1/60, self.timer_callback)
+        self.camera_0_frame = frame
+        self.camera_1_frame = frame
+        self.camera_2_frame = frame
+        self.camera_3_frame = frame
 
-        # Other subscriptions
-        self.create_subscription(String, f'/qr/string/camera_{self.camera_0}', self.get_qr_strings, 1)
-        self.create_subscription(String, f'/qr/string/camera_{self.camera_1}', self.get_qr_strings, 1)
-        self.create_subscription(String, f'/qr/string/camera_{self.camera_2}', self.get_qr_strings, 1)
-        self.create_subscription(String, f'/qr/string/camera_{self.camera_3}', self.get_qr_strings, 1)
+        timer_period = 1/60
+        self.timer = self.create_timer(timer_period, self.timer_callback)
 
-        self.create_subscription(String, f'/hazmat/string/camera_{self.camera_0}', self.get_hazmat_strings, 1)
-        self.create_subscription(String, f'/hazmat/string/camera_{self.camera_1}', self.get_hazmat_strings, 1)
-        self.create_subscription(String, f'/hazmat/string/camera_{self.camera_2}', self.get_hazmat_strings, 1)
-        self.create_subscription(String, f'/hazmat/string/camera_{self.camera_3}', self.get_hazmat_strings, 1)
+        '''
+        tells which video frames to display.  can be:
+            raw
+            hazmat
+            motion
+            qr
+        '''
 
-        self.create_subscription(String, '/keyboard', self.get_keyboard, 1)
-        self.create_subscription(String, '/motor_states/drive', self.get_ms, 1)
-        self.create_subscription(Int8, '/speed', self.get_speed, 1)
+        self.qr_camera_0_string_subscription = self.create_subscription(
+            String,
+            f'/qr/string/camera_0',
+            self.get_qr_strings,
+            1)
+        self.qr_camera_1_string_subscription = self.create_subscription(
+            String,
+            f'/qr/string/camera_1',
+            self.get_qr_strings,
+            1)
+        self.qr_camera_2_string_subscription = self.create_subscription(
+            String,
+            f'/qr/string/camera_2',
+            self.get_qr_strings,
+            1)
+        self.qr_camera_3_string_subscription = self.create_subscription(
+            String,
+            f'/qr/string/camera_3',
+            self.get_qr_strings,
+            1)
 
-    # ---------------- CAMERA CALLBACKS ----------------
-    def camera_0_callback(self, msg):
-        self.camera_0_frame = self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8')
+        self.hazmat_camera_0_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_0',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_1_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_1',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_2_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_2',
+            self.get_hazmat_strings,
+            1)
+        self.hazmat_camera_3_string_subscription = self.create_subscription(
+            String,
+            f'/hazmat/string/camera_3',
+            self.get_hazmat_strings,
+            1)
+        
+        self.keyboard_subscription = self.create_subscription(
+            String,
+            f'/keyboard',
+            self.get_keyboard,
+            1)
+        
+        self.base_motion_subscription = self.create_subscription(
+            String,
+            f'/motor_states/drive',
+            self.get_ms,
+            1)
+        
+        self.speed_subscription = self.create_subscription(
+            Int8,
+            f'/speed',
+            self.get_speed,
+            1)
+        
+        self.bridge = CvBridge()
 
-    def camera_1_callback(self, msg):
-        self.camera_1_frame = self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8')
+    def camera_0_callback(self, frame_msg):
+        self.camera_0_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
+    
+    def camera_1_callback(self, frame_msg):
+        self.camera_1_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
 
-    def camera_2_callback(self, msg):
-        self.camera_2_frame = self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8')
+    def camera_2_callback(self, frame_msg):
+        self.camera_2_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
+    
+    def camera_3_callback(self, frame_msg):
+        self.camera_3_frame = self.bridge.compressed_imgmsg_to_cv2(frame_msg, desired_encoding='bgr8')
 
-    def camera_3_callback(self, msg):
-        self.camera_3_frame = self.bridge.compressed_imgmsg_to_cv2(msg, 'bgr8')
-
-    # ---------------- TIMER CALLBACK ----------------
     def timer_callback(self):
-        global video_display, qr_codes_strings, hazmat_strings, speed, base_motion
+        print("spinning")
+        global video_display
+        global keys_down
+        global keyboard_capturing
+        global qr_codes_strings
+        global hazmat_strings
 
-        # Get frames
-        f0, f1, f2, f3 = self.camera_0_frame, self.camera_1_frame, self.camera_2_frame, self.camera_3_frame
+        # Get frames and display them
+        frame_0 = self.camera_0_frame
+        frame_1 = self.camera_1_frame
+        frame_2 = self.camera_2_frame
+        frame_3 = self.camera_3_frame
+        print("got frames")
 
-        # Resize + layout (unchanged logic)
         window_height = 1000
 
-        if self.camera_view in (0,1,2,3):
-            small = (333, 250)
-            nf0 = cv2.resize(f0, small)
-            nf1 = cv2.resize(f1, small)
-            nf2 = cv2.resize(f2, small)
-            nf3 = cv2.resize(f3, small)
-            top = cv2.hconcat([nf0, nf1, nf2, nf3])
+        if self.camera_view == 0 or self.camera_view == 1 or self.camera_view == 2 or self.camera_view == 3:
+            top_camera_width = 333
+            top_camera_height = 250
+            new_frame_0 = cv2.resize(frame_0, (top_camera_width, top_camera_height))
+            new_frame_1 = cv2.resize(frame_1, (top_camera_width, top_camera_height))
+            new_frame_2 = cv2.resize(frame_2, (top_camera_width, top_camera_height))
+            new_frame_3 = cv2.resize(frame_3, (top_camera_width, top_camera_height))
+            top_row_cameras = cv2.hconcat([new_frame_0, new_frame_1, new_frame_2, new_frame_3])
 
-            vert = np.full((750, 166, 3), 150, dtype=np.uint8)
+            vert_bar = np.full((750, 166, 3), 150, dtype=np.uint8)
 
             if self.camera_view == 0:
-                big = cv2.resize(f0, (1000, 750))
-            elif self.camera_view == 1:
-                big = cv2.resize(f1, (1000, 750))
-            elif self.camera_view == 2:
-                big = cv2.resize(f2, (1000, 750))
-            else:
-                big = cv2.resize(f3, (1000, 750))
-
-            bottom = cv2.hconcat([vert, big, vert])
-            all_frames = cv2.vconcat([top, bottom])
-
+                new_frame_0 = cv2.resize(frame_0, (1000, 750))
+                bottom_section = cv2.hconcat([vert_bar, new_frame_0, vert_bar])
+                all_frames = cv2.vconcat([top_row_cameras, bottom_section])
+            if self.camera_view == 1:
+                new_frame_1 = cv2.resize(frame_1, (1000, 750))
+                bottom_section = cv2.hconcat([vert_bar, new_frame_1, vert_bar])
+                all_frames = cv2.vconcat([top_row_cameras, bottom_section])
+            if self.camera_view == 2:
+                new_frame_2 = cv2.resize(frame_2, (1000, 750))
+                bottom_section = cv2.hconcat([vert_bar, new_frame_2, vert_bar])
+                all_frames = cv2.vconcat([top_row_cameras, bottom_section])
+            if self.camera_view == 3:
+                new_frame_3 = cv2.resize(frame_3, (1000, 750))
+                bottom_section = cv2.hconcat([vert_bar, new_frame_3, vert_bar])
+                all_frames = cv2.vconcat([top_row_cameras, bottom_section])
         else:
-            h = window_height // 2
-            def resize_half(img):
-                ih, iw = img.shape[:2]
-                new_w = int((iw/ih)*h)
-                return cv2.resize(img, (new_w, h))
+            camera_display_height = int(window_height/2)
+            (h, w) = frame_0.shape[:2]
+            new_w_0 = int((w/h)*camera_display_height)
+            (h, w) = frame_1.shape[:2]
+            new_w_1 = int((w/h)*camera_display_height)
+            (h, w) = frame_2.shape[:2]
+            new_w_2 = int((w/h)*camera_display_height)
+            (h, w) = frame_3.shape[:2]
+            new_w_3 = int((w/h)*camera_display_height)
 
-            r0, r1, r2, r3 = map(resize_half, (f0,f1,f2,f3))
-            all_frames = cv2.vconcat([cv2.hconcat([r0,r1]), cv2.hconcat([r2,r3])])
+            frame_0 = cv2.resize(frame_0, (new_w_0, camera_display_height))
+            frame_1 = cv2.resize(frame_1, (new_w_1, camera_display_height))
+            frame_2 = cv2.resize(frame_2, (new_w_2, camera_display_height))
+            frame_3 = cv2.resize(frame_3, (new_w_3, camera_display_height))
+            frames_0_1 = cv2.hconcat([frame_0, frame_1])
+            frames_2_3 = cv2.hconcat([frame_2, frame_3])
+            all_frames = cv2.vconcat([frames_0_1, frames_2_3])
+        # add black side panel
+        black_background = np.zeros((window_height, 480, 3), dtype=np.uint8)
+        all_frames = cv2.hconcat([all_frames, black_background])
 
-        # Side panel
-        side = np.zeros((window_height, 480, 3), dtype=np.uint8)
-        all_frames = cv2.hconcat([all_frames, side])
+        # cv2.putText(frame, text, position, font, scale, color, thickness)
+        # cv2.putText(all_frames, f'Motor Speed: {base_motion_states["speed"]*100}%', (1350, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        # -------------------------
 
-        # Draw text
         left_x = 1350
-        cv2.putText(all_frames, f'Motor Speed: {speed}%', (left_x, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-        cv2.putText(all_frames, f'Base Motion: {base_motion}', (left_x, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-        cv2.putText(all_frames, f'Video Display: {video_display}', (left_x, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
 
-        cv2.putText(all_frames, 'QR Labels:', (left_x, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-        y = 250
-        for s in qr_codes_strings:
-            cv2.putText(all_frames, s, (left_x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-            y += 50
+        cv2.putText(all_frames, f'Motor Speed: {speed}%', (left_x, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Base Motion: {base_motion}', (left_x, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'Video Display: {video_display}', (left_x, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        cv2.putText(all_frames, f'QR Labels:', (left_x, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
 
-        cv2.putText(all_frames, 'Hazmat Labels:', (left_x, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-        y = 600
-        for s in hazmat_strings:
-            cv2.putText(all_frames, s, (left_x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
-            y += 50
+        qr_codes_string = ""
+        for string in qr_codes_strings:
+            qr_codes_string += string + "\n"
+        
+        hazmat_string = ""
+        for string in hazmat_strings:
+            hazmat_string += string + "\n"
+        
+        print(f"QR Codes String: {qr_codes_string}")
+        print(f"Hazmat String: {hazmat_string}")
 
-        # Publish
+        start_y = 250
+        y_inc = 50
+        for i, data in enumerate(qr_codes_string.split("\n")):
+            cv2.putText(all_frames, data, (left_x, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+        
+        cv2.putText(all_frames, f'Hazmat Labels:', (left_x, 550), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
+        start_y = 600
+        y_inc = 50
+        for i, data in enumerate(hazmat_string.split("\n")):
+            cv2.putText(all_frames, data, (left_x, start_y+i*y_inc), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
         msg = self.bridge.cv2_to_imgmsg(all_frames, "bgr8")
+
         self.main_interface_frame.publish(msg)
 
-    # ---------------- OTHER CALLBACKS ----------------
-    def get_qr_strings(self, msg):
+        # cv2.imshow("Camera Output", all_frames)
+
+        # Handle keyboard input
+
+        # cv2.waitKey(1)
+
+        # if keyboard.Key.f11 in keys_down:
+        #     keyboard_capturing = False
+        # elif keyboard.Key.f12 in keys_down:
+        #     keyboard_capturing = True
+
+        # if keyboard_capturing:
+        #     if keyboard.Key.esc in keys_down:
+        #         # quit
+        #         raise PeacefulExit()
+            
+        #     if "w" in keys_down and "a" in keys_down:
+        #         base_motion_states["base_motion"] = "forward_left"
+        #     elif "w" in keys_down and "d" in keys_down:
+        #         base_motion_states["base_motion"] = "forward_right"
+        #     elif "s" in keys_down and "a" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse_left"
+        #     elif "s" in keys_down and "d" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse_right"
+        #     elif "w" in keys_down:
+        #         base_motion_states["base_motion"] = "forward"
+        #     elif "s" in keys_down:
+        #         base_motion_states["base_motion"] = "reverse"
+        #     elif "a" in keys_down:
+        #         base_motion_states["base_motion"] = "left"
+        #     elif "d" in keys_down:
+        #         base_motion_states["base_motion"] = "right"
+        #     else:
+        #         base_motion_states["base_motion"] = "still"
+
+        #     if "1" in keys_down:
+        #         self.camera_view = 0
+        #     elif "2" in keys_down:
+        #         self.camera_view = 1
+        #     elif "3" in keys_down:
+        #         self.camera_view = 2
+        #     elif "4" in keys_down:
+        #         self.camera_view = 3
+        #     elif "5" in keys_down:
+        #         self.camera_view = -1
+            
+        #     if "h" in keys_down:
+        #         video_display = "hazmat"
+        #         raise ChangeCamerasException
+        #     elif "m" in keys_down:
+        #         video_display = "motion"
+        #         raise ChangeCamerasException
+        #     elif "q" in keys_down:
+        #         video_display = "qr"
+        #         raise ChangeCamerasException
+        #     elif "r" in keys_down:
+        #         video_display = "raw"
+        #         raise ChangeCamerasException
+
+        #     if "c" in keys_down:
+        #         qr_codes_strings = []
+        #         hazmat_strings = []
+        
+        # bms_msg -> base motion states message
+        # bms_msg = String()
+        # bms_msg.data = json.dumps(base_motion_states)
+        # self.bms_publisher.publish(bms_msg)
+        
+        # self.get_logger().info(f'I heard: {four_frames.dtype}\n\n\n\n\n')
+
+    def get_qr_strings(self, qr_strings):
         global qr_codes_strings
-        for s in eval(msg.data):
-            if s not in qr_codes_strings:
-                qr_codes_strings.append(s)
+        qr_strings = eval(qr_strings.data)
+        for string in qr_strings:
+            if string not in qr_codes_strings:
+                qr_codes_strings.append(string)
 
-    def get_hazmat_strings(self, msg):
+    def get_hazmat_strings(self, h_strings):
         global hazmat_strings
-        for s in eval(msg.data):
-            if s not in hazmat_strings:
-                hazmat_strings.append(s)
+        h_strings = eval(h_strings.data)
+        for string in h_strings:
+            if string not in hazmat_strings:
+                hazmat_strings.append(string)
 
-    def get_keyboard(self, msg):
-        global keys_down, video_display, qr_codes_strings, hazmat_strings
-        keys_down = eval(msg.data)
-
+    
+    def get_keyboard(self, keyboard_msg):
+        global keys_down
+        global qr_codes_strings
+        global hazmat_strings
+        global video_display
+        keys_down = eval(keyboard_msg.data)
+        print(f"Keys Down: {keys_down}")
         if "KEY_ESC" in keys_down:
+            # quit
             raise PeacefulExit()
-
-        if "KEY_1" in keys_down: self.camera_view = 0
-        elif "KEY_2" in keys_down: self.camera_view = 1
-        elif "KEY_3" in keys_down: self.camera_view = 2
-        elif "KEY_4" in keys_down: self.camera_view = 3
-        elif "KEY_5" in keys_down: self.camera_view = -1
-
-        if "KEY_H" in keys_down:
+        if "KEY_1" in keys_down:
+            self.camera_view = 0
+        elif "KEY_2" in keys_down:
+            self.camera_view = 1
+        elif "KEY_3" in keys_down:
+            self.camera_view = 2
+        elif "KEY_4" in keys_down:
+            self.camera_view = 3
+        elif "KEY_5" in keys_down:
+            self.camera_view = -1
+        
+        if "KEY_H" in keys_down and video_display != "hazmat":
             video_display = "hazmat"
             raise ChangeCamerasException
-        elif "KEY_Q" in keys_down:
+        elif "KEY_Q" in keys_down and video_display != "qr":
             video_display = "qr"
             raise ChangeCamerasException
-        elif "KEY_R" in keys_down:
+        elif "KEY_R" in keys_down and video_display != "raw":
             video_display = "raw"
             raise ChangeCamerasException
+        
+        if "KEY_I" in keys_down and show_ir == False:
+            show_ir = True
+            raise ChangeCamerasException
+        else if "KEY_P" in keys_down and show_ir == True:
+            show_ir = False
+            raise ChangeCamerasException
 
+        # maybe get rid of this if I'm gonna not put them on screen, and only send to file???
         if "KEY_C" in keys_down:
-            qr_codes_strings.clear()
-            hazmat_strings.clear()
+            qr_codes_strings = []
+            hazmat_strings = []
 
-    def get_ms(self, msg):
+    def get_ms(self, ms_msg):
         global base_motion
-        base_motion = msg.data
+        base_motion = ms_msg.data
 
-    def get_speed(self, msg):
+    def get_speed(self, speed_msg):
         global speed
-        speed = msg.data
+        speed = speed_msg.data
 
-
+        
 def main(args=None):
+    global video_display
     rclpy.init(args=args)
-    node = MainInterfaceNode()
 
-    executor = MultiThreadedExecutor()
-    executor.add_node(node)
+    main_interface_node = MainInterfaceNode()
 
-    try:
-        executor.spin()
-    except PeacefulExit:
-        pass
-    except ChangeCamerasException:
-        pass
-    finally:
-        executor.shutdown()
-        node.destroy_node()
-        rclpy.shutdown()
+    end_run = False
+    while not end_run:
+        print("start while")
+        try:
+            print("in try")
+            rclpy.spin(main_interface_node)
+        except ChangeCamerasException as e:
+            print(e)
+            main_interface_node.destroy_node()
+            main_interface_node = MainInterfaceNode()
+            print("after destruction")
+        except Exception as e:
+            print(e)
+            main_interface_node.destroy_node()
+            rclpy.shutdown()
+            end_run = True
+        print("after exceptipns")
+    
+    print("Exited program successfully.  Have a nice day!")
 
 
 if __name__ == '__main__':
