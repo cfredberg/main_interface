@@ -429,7 +429,7 @@ class MainInterfaceNode(Node):
         if "KEY_I" in keys_down and show_ir == False:
             show_ir = True
             raise ChangeCamerasException
-        else if "KEY_P" in keys_down and show_ir == True:
+        elif "KEY_P" in keys_down and show_ir == True:
             show_ir = False
             raise ChangeCamerasException
 
