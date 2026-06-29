@@ -24,7 +24,8 @@ setup(
             'read_speed = main_interface.read_speed:main',
             'keyboard = main_interface.keyboard:main',
             'wayland_keyboard = main_interface.wayland_keyboard:main',
-            'simple_decompressor = main_interface.simple_decompressor:main'
+            'simple_decompressor = main_interface.simple_decompressor:main',
+            'ir_interpret = ir_interpret.ir_interpret:main',
         ],
     },
 )
