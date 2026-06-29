@@ -13,6 +13,7 @@ class ReadSpeedNode(Node):
         
         self.speed_pub = self.create_publisher(Int8, '/speed', 1)
         self.rev_pub = self.create_publisher(Bool, '/reverse', 1)
+        self.hazmat_pub = self.create_publisher(Int8, '/hazmat_thresh', 1)
 
         self.arduino = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)
         self.arduino.flushInput()
@@ -20,6 +21,10 @@ class ReadSpeedNode(Node):
         timer_period = 1/120  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
+
+        self.previous_speed = 50
+        self.previous_hazmat_thresh = 95
+        self.previous_reverse = False
 
     def timer_callback(self):
         try:
@@ -32,16 +37,30 @@ class ReadSpeedNode(Node):
                     data_string = data_string.split()
                     speed_percent = int(data_string[0])
                     reverse = bool(int(data_string[1]))
+                    hazmat_thresh = int(data_string[2])
+
+
 
                     self.arduino.flushInput()
 
-                    speed_msg = Int8()
-                    speed_msg.data = speed_percent
-                    self.speed_pub.publish(speed_msg)
+                    if abs(self.previous_speed - speed_percent) > 1:
+                        speed_msg = Int8()
+                        speed_msg.data = speed_percent
+                        self.speed_pub.publish(speed_msg)
+                        self.previous_speed = speed_percent
+                    
+                    if abs(self.previous_hazmat_thresh - hazmat_thresh) > 1:
+                        hazmat_msg = Int8()
+                        hazmat_msg.data = hazmat_thresh
+                        self.hazmat_pub.publish(hazmat_msg)
+                        self.previous_hazmat_thresh = hazmat_thresh
 
-                    rev_msg = Bool()
-                    rev_msg.data = reverse
-                    self.rev_pub.publish(rev_msg)
+                    if self.previous_reverse != reverse:
+                        rev_msg = Bool()
+                        rev_msg.data = reverse
+                        self.rev_pub.publish(rev_msg)
+                        self.previous_reverse = reverse
+
 
         except UnicodeDecodeError as e:
             print(e)

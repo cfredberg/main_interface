@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import String
-from std_msgs.msg import Int8
+from std_msgs.msg import Int8, Bool
 from sensor_msgs.msg import Image
 from message_filters import Subscriber, TimeSynchronizer
 
@@ -18,6 +18,8 @@ import json
 from cv_bridge import CvBridge
 
 base_motion = "still"
+pov_base_motion = "still"
+rev_status = False
 
 video_display = "raw"
 
@@ -31,6 +33,13 @@ class KeyboardInputNode(Node):
         
         self.keyboard_input_publisher = self.create_publisher(String, '/keyboard', 1)
         self.ms_publisher = self.create_publisher(String, '/motor_states/drive', 1)
+        self.pov_ms_publisher = self.create_publisher(String, '/motor_states/pov_drive', 1)
+
+        self.reverse_subscription = self.create_subscription(
+            Bool,
+            f'/reverse',
+            self.get_reverse,
+            1)
 
         self.kbd = evdev.InputDevice(f"/dev/input/by-id/{kbd_name}")
 
@@ -39,6 +48,10 @@ class KeyboardInputNode(Node):
         timer_period = 1/60  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
+
+    def get_reverse(self, msg):
+        global rev_status
+        rev_status = msg.data
 
     def timer_callback(self):
         raw_keys = self.kbd.active_keys()
@@ -53,25 +66,56 @@ class KeyboardInputNode(Node):
             # if keyboard.Key.esc in keys_down:
             #     # quit
             #     raise PeacefulExit()
-            
-            if "KEY_W" in keys_down and "KEY_A" in keys_down:
-                base_motion = "forward_left"
-            elif "KEY_W" in keys_down and "KEY_D" in keys_down:
-                base_motion = "forward_right"
-            elif "KEY_S" in keys_down and "KEY_A" in keys_down:
-                base_motion = "reverse_left"
-            elif "KEY_S" in keys_down and "KEY_D" in keys_down:
-                base_motion = "reverse_right"
-            elif "KEY_W" in keys_down:
-                base_motion = "forward"
-            elif "KEY_S" in keys_down:
-                base_motion = "reverse"
-            elif "KEY_A" in keys_down:
-                base_motion = "left"
-            elif "KEY_D" in keys_down:
-                base_motion = "right"
+
+            if not rev_status:
+                if "KEY_W" in keys_down and "KEY_A" in keys_down:
+                    base_motion = "forward_left"
+                elif "KEY_W" in keys_down and "KEY_D" in keys_down:
+                    base_motion = "forward_right"
+                elif "KEY_S" in keys_down and "KEY_A" in keys_down:
+                    base_motion = "reverse_left"
+                elif "KEY_S" in keys_down and "KEY_D" in keys_down:
+                    base_motion = "reverse_right"
+                elif "KEY_W" in keys_down:
+                    base_motion = "forward"
+                elif "KEY_S" in keys_down:
+                    base_motion = "reverse"
+                elif "KEY_A" in keys_down:
+                    base_motion = "left"
+                elif "KEY_D" in keys_down:
+                    base_motion = "right"
+                else:
+                    base_motion = "still"
+                pov_base_motion = base_motion
             else:
-                base_motion = "still"
+                if "KEY_W" in keys_down and "KEY_A" in keys_down:
+                    pov_base_motion = "forward_left"
+                    base_motion = "reverse_right"
+                elif "KEY_W" in keys_down and "KEY_D" in keys_down:
+                    pov_base_motion = "forward_right"
+                    base_motion = "reverse_left"
+                elif "KEY_S" in keys_down and "KEY_A" in keys_down:
+                    pov_base_motion = "reverse_left"
+                    base_motion = "forward_right"
+                elif "KEY_S" in keys_down and "KEY_D" in keys_down:
+                    pov_base_motion = "reverse_right"
+                    base_motion = "forward_left"
+                elif "KEY_W" in keys_down:
+                    pov_base_motion = "forward"
+                    base_motion = "reverse"
+                elif "KEY_S" in keys_down:
+                    pov_base_motion = "reverse"
+                    base_motion = "forward"
+                elif "KEY_A" in keys_down:
+                    pov_base_motion = "left"
+                    base_motion = "right"
+                elif "KEY_D" in keys_down:
+                    pov_base_motion = "right"
+                    base_motion = "left"
+                else:
+                    pov_base_motion = "still"
+                    base_motion = "still"
+
 
             current_keys = String()
             current_keys.data = str(keys_down)
@@ -83,6 +127,9 @@ class KeyboardInputNode(Node):
         ms_msg = String()
         ms_msg.data = base_motion
         self.ms_publisher.publish(ms_msg)
+
+        ms_msg.data = pov_base_motion
+        self.pov_ms_publisher.publish(ms_msg)
 
 
 def main(args=None):
