@@ -25,7 +25,8 @@ setup(
             'keyboard = main_interface.keyboard:main',
             'wayland_keyboard = main_interface.wayland_keyboard:main',
             'simple_decompressor = main_interface.simple_decompressor:main',
-            'ir_interpret = ir_interpret.ir_interpret:main',
+            'ir_interpret = main_interface.ir_interpret:main',
+            'align_auto = main_interface.align_auto:main',
         ],
     },
 )
