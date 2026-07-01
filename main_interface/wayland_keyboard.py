@@ -108,10 +108,10 @@ class KeyboardInputNode(Node):
                     base_motion = "forward"
                 elif "KEY_A" in keys_down:
                     pov_base_motion = "left"
-                    base_motion = "right"
+                    base_motion = "left"
                 elif "KEY_D" in keys_down:
                     pov_base_motion = "right"
-                    base_motion = "left"
+                    base_motion = "right"
                 else:
                     pov_base_motion = "still"
                     base_motion = "still"
