@@ -14,7 +14,7 @@ class ReadSpeedNode(Node):
         self.speed_pub = self.create_publisher(Int8, '/speed', 1)
         self.rev_pub = self.create_publisher(Bool, '/reverse', 1)
         self.hazmat_pub = self.create_publisher(Int8, '/hazmat_thresh', 1)
-
+        self.arm_reset_pub = self.create_publisher(Bool, '/arm_ctl/reset', 1)
         self.arduino = serial.Serial(port='/dev/ttyACM0', baudrate=9600, timeout=1)
         self.arduino.flushInput()
 
@@ -25,6 +25,7 @@ class ReadSpeedNode(Node):
         self.previous_speed = 50
         self.previous_hazmat_thresh = 95
         self.previous_reverse = False
+        self.arm_reset = True
 
     def timer_callback(self):
         try:
@@ -38,7 +39,8 @@ class ReadSpeedNode(Node):
                     speed_percent = int(data_string[0])
                     reverse = bool(int(data_string[1]))
                     hazmat_thresh = int(data_string[2])
-
+                    arm_reset = bool(int(data_string[4]))
+                    arm_reset_mode = bool(int(data_string[4]))
 
 
                     self.arduino.flushInput()
@@ -60,7 +62,9 @@ class ReadSpeedNode(Node):
                         rev_msg.data = reverse
                         self.rev_pub.publish(rev_msg)
                         self.previous_reverse = reverse
-
+                    if self.arm_reset and not arm_reset:
+                        self.arm_reset_pub.publish(arm_reset_mode)
+                    self.arm_reset = arm_reset                    
 
         except UnicodeDecodeError as e:
             print(e)
